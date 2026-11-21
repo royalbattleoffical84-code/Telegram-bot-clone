@@ -1815,9 +1815,6 @@ bot.action(/^agreetopup_(\d+)$/, async (ctx) => {
   await ctx.answerCbQuery('Generating QR...');
   await deleteTriggerMessage(ctx);
 
-  const paymentSettings = await fb.getPaymentSettings();
-  const qr = await fampay.generateQr(paymentSettings.upiId, amount, { ...paymentSettings, orderId: order.id });
-
   const order = await fb.createOrder({
     userId: String(telegramId),
     productId: 'WALLET_TOPUP',
@@ -1826,10 +1823,12 @@ bot.action(/^agreetopup_(\d+)$/, async (ctx) => {
     paymentMethod: 'fampay',
     isWalletTopup: true
   });
+  const paymentSettings = await fb.getPaymentSettings();
+  const qr = await fampay.generateQr(paymentSettings.upiId, amount, { ...paymentSettings, orderId: order.id });
 
   if (!qr.success) {
     await fb.updateOrderStatus(order.id, 'failed');
-    return ctx.reply('❌ QR generate nahi ho paya. Try again.');
+    return ctx.reply(`❌ QR generate nahi ho paya. ${qr.error || 'Try again.'}`);
   }
 
   await fb.updateOrderStatus(order.id, 'pending', { famOrderId: qr.orderId, gatewayEnvironment: qr.environment || null });

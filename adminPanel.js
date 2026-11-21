@@ -1453,15 +1453,21 @@ function setupAdminPanel(bot, fb, mdEscape) {
 
   async function sendPaymentSettingsMenu(ctx) {
     const s = await fb.getPaymentSettings();
+    const isClone = process.env.IS_CLONE === '1';
     const tokenReady = Boolean(String(process.env.ORVIX_PAY_TOKEN || '').trim());
     const baseUrl = process.env.ORVIX_PAY_BASE_URL || 'https://codertufan.bond/api';
-    const text = `💳 *Payment Settings (ORVIX PAY)*\n\n🔑 Server API Token: ${tokenReady ? '✅ configured in hosting environment' : '❌ ORVIX_PAY_TOKEN missing'}\n🌐 API URL: ${mdEscape(baseUrl)}\n\n⚠️ Token is server-only. Set ORVIX_PAY_TOKEN in your Node hosting Environment Variables, then restart the bot. Do not send it in Telegram chat.\n\n💰 UPI ID (legacy display): \`${s.upiId || 'not set'}\`\n📜 T&C: ${s.termsAndConditions ? 'set' : 'not set'}`;
+    const text = isClone
+      ? `💳 *Payment Settings (ORVIX PAY)*\n\n🔑 ORVIX PAY API Key: ${String(s.apiKey || '').trim() ? '✅ configured for this clone' : '❌ not configured'}\n🌐 API URL: ${mdEscape(baseUrl)}\n\nApna ORVIX PAY API Token yahan set karein. Yeh key sirf is cloned bot ke liye save hogi.\n\n💰 UPI ID (legacy display): \`${s.upiId || 'not set'}\`\n📜 T&C: ${s.termsAndConditions ? 'set' : 'not set'}`
+      : `💳 *Payment Settings (ORVIX PAY)*\n\n🔑 Server API Token: ${tokenReady ? '✅ configured in hosting environment' : '❌ ORVIX_PAY_TOKEN missing'}\n🌐 API URL: ${mdEscape(baseUrl)}\n\n⚠️ Token is server-only. Set ORVIX_PAY_TOKEN in your Node hosting Environment Variables, then restart the bot. Do not send it in Telegram chat.\n\n💰 UPI ID (legacy display): \`${s.upiId || 'not set'}\`\n📜 T&C: ${s.termsAndConditions ? 'set' : 'not set'}`;
 
-    const buttons = Markup.inlineKeyboard([
+    const rows = [];
+    if (isClone) rows.push([Markup.button.callback('🔑 ORVIX PAY API Key', 'admin_editclone_orvixkey')]);
+    rows.push(
       [Markup.button.callback('💰 Edit UPI ID', 'admin_editfamupi')],
       [Markup.button.callback('📜 Edit Terms & Conditions', 'admin_editfamtc')],
       [Markup.button.callback('⬅️ Back', 'admin_settings')]
-    ]);
+    );
+    const buttons = Markup.inlineKeyboard(rows);
 
     try { await ctx.editMessageText(text, { parse_mode: 'Markdown', ...buttons }); }
     catch (e) { await ctx.reply(text, { parse_mode: 'Markdown', ...buttons }); }
@@ -1472,6 +1478,12 @@ function setupAdminPanel(bot, fb, mdEscape) {
     await ctx.answerCbQuery();
     adminState[ctx.from.id] = { step: 'awaiting_fam_apikey' };
     await ctx.reply('🔑 Send the new FamPay API key:');
+  });
+  bot.action('admin_editclone_orvixkey', async (ctx) => {
+    if (process.env.IS_CLONE !== '1' || !(await isOwner(ctx))) return;
+    await ctx.answerCbQuery();
+    adminState[ctx.from.id] = { step: 'awaiting_clone_orvixkey' };
+    await ctx.reply('🔑 Apne ORVIX PAY API Token bhejein. Token save karne ke baad yeh message delete kar diya jayega.');
   });
 
   bot.action('admin_editfamurl', async (ctx) => {
@@ -2103,6 +2115,13 @@ function setupAdminPanel(bot, fb, mdEscape) {
     }
 
     // ---- Payment Settings (ORVIX PAY) ----
+    if (state.step === 'awaiting_clone_orvixkey') {
+      try { await ctx.deleteMessage(); } catch (e) {}
+      await fb.updatePaymentSettings({ apiKey: text.trim() });
+      delete adminState[ctx.from.id];
+      await ctx.reply('✅ ORVIX PAY API Key is cloned bot ke liye save/update ho gayi.');
+      return true;
+    }
     if (state.step === 'awaiting_fam_apikey') {
       await fb.updatePaymentSettings({ apiKey: text });
       delete adminState[ctx.from.id];

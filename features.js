@@ -253,7 +253,7 @@ function setupFeatures(bot, fb, userState, adminState, { mdEscape, sendMainMenu,
     const qr = await fampay.generateQr(paymentSettings.upiId, p.f.fee, { ...paymentSettings, orderId: order.id });
     if (!qr.success) {
       await fb.updateOrderStatus(order.id, 'failed');
-      return ctx.reply('❌ Payment link nahi ban paya. Thodi der baad try karo ya wallet se pay karo.');
+      return ctx.reply(`❌ Payment link nahi ban paya. ${qr.error || 'Thodi der baad try karo ya wallet se pay karo.'}`);
     }
     await fb.updateOrderStatus(order.id, 'pending', { famOrderId: qr.orderId, gatewayEnvironment: qr.environment || null });
     delete userState[uid];

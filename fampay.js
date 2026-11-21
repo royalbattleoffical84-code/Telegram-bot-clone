@@ -8,8 +8,8 @@ const axios = require('axios');
  *   POST https://codertufan.bond/api/create-order
  *   POST https://codertufan.bond/api/order-status
  *
- * ORVIX_PAY_TOKEN must be set in the Node server environment.
- * Never put the token in miniapp/browser code or in the bot's editable settings.
+ * The main bot uses ORVIX_PAY_TOKEN from its host environment. Clones receive
+ * their own key from their isolated payment settings.
  *
  * Existing callers still import this module as `fampay.js`; the exported
  * function names are retained to avoid breaking the store's payment flows.
@@ -43,8 +43,11 @@ function apiError(data, fallback) {
  * lost. order_id is the store's stable reference to help reconcile duplicates.
  */
 async function generateQr(_upiId, amount, settings = {}) {
-  if (!TOKEN) {
-    return { success: false, error: 'ORVIX_PAY_TOKEN missing. Add it to the Node host environment and restart the app.' };
+  const token = process.env.IS_CLONE === '1' ? String(settings.apiKey || '').trim() : TOKEN;
+  if (!token) {
+    return { success: false, error: process.env.IS_CLONE === '1'
+      ? 'ORVIX PAY API Key missing. Clone admin, configure it in Bot Settings → Payment Settings → ORVIX PAY API Key.'
+      : 'ORVIX_PAY_TOKEN missing. Add it to the Node host environment and restart the app.' };
   }
   const numericAmount = Number(amount);
   if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
@@ -53,7 +56,7 @@ async function generateQr(_upiId, amount, settings = {}) {
 
   const localOrderId = String(settings.orderId || `ORVIX-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   const payload = {
-    api_token: TOKEN,
+    api_token: token,
     amount: numericAmount.toFixed(2),
     order_id: localOrderId
   };
@@ -100,9 +103,10 @@ async function generateQr(_upiId, amount, settings = {}) {
  * "success" status is returned as success. Pending/failed/expired/refunded
  * remain non-fulfillable.
  */
-async function checkVerificationStatus(gatewayOrderId) {
-  if (!TOKEN || !gatewayOrderId) return null;
-  const payload = form({ api_token: TOKEN, order_id: String(gatewayOrderId) });
+async function checkVerificationStatus(gatewayOrderId, settings = {}) {
+  const token = process.env.IS_CLONE === '1' ? String(settings.apiKey || '').trim() : TOKEN;
+  if (!token || !gatewayOrderId) return null;
+  const payload = form({ api_token: token, order_id: String(gatewayOrderId) });
 
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
