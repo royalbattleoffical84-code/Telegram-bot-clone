@@ -16,7 +16,21 @@ const path = require('path');
 
 // DATA_DIR can point at a mounted Render Disk (e.g. /var/data) if you have one.
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
-const storage = require('./storage');
+// Resolve storage.js from the same directory first, then the project root.
+// This supports both layouts: src/localdb.js + src/storage.js, or
+// src/localdb.js + project-root/storage.js.
+const storageCandidates = [
+  path.join(__dirname, 'storage.js'),
+  path.join(__dirname, '..', 'storage.js')
+];
+const storageFile = storageCandidates.find(candidate => fs.existsSync(candidate));
+if (!storageFile) {
+  throw new Error(
+    `Cannot find storage.js. Expected it beside localdb.js (${storageCandidates[0]}) ` +
+    `or in the project root (${storageCandidates[1]}).`
+  );
+}
+const storage = require(storageFile);
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const FILES = {
